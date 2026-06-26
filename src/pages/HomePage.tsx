@@ -12,7 +12,7 @@ const categoryNav = categories.map(c => ({ key: c.key, label: c.label, emoji: c.
 export default function HomePage() {
   const { favorites, toggleFavorite, isFavorite } = useFavorites();
   const { recommended, refresh } = useDailyRec(favorites);
-  const { isInCart, addToCart, isInMenu, addToMenu, removeFromMenu, getMenuDishes, clearMenu } = useCartContext();
+  const { isInCart, addToCart, isInMenu, addToMenu, removeFromMenu, getMenuDishes, clearMenu, refreshMenu, menuConnected } = useCartContext();
   const sectionRefs = useRef<Record<string, HTMLDivElement | null>>({});
 
   const scrollTo = (key: string) => {
@@ -27,7 +27,6 @@ export default function HomePage() {
       <DailyRecommend
         dishes={recommended}
         onRefresh={refresh}
-        isFavorite={isFavorite}
         onAddToMenu={addToMenu}
         isInMenu={isInMenu}
       />
@@ -37,6 +36,8 @@ export default function HomePage() {
         dishes={menuDishes}
         onRemove={removeFromMenu}
         onClear={clearMenu}
+        onRefresh={refreshMenu}
+        connected={menuConnected}
       />
 
       {/* === Category quick nav === */}

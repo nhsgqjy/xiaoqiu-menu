@@ -1,24 +1,15 @@
 import { useState, useEffect, useCallback } from 'react';
 import { getDishById, Dish } from '../data/dishes';
-import { supabase, TABLES } from '../lib/supabase';
+import { supabase, TABLES, fetchTable, subscribeTable } from '../lib/supabase';
 
-interface CartItem {
-  dishId: number;
-}
+interface CartItem { dishId: number; }
 
 const STORAGE_KEY = 'xiaoqiu-cart';
 
 function loadLocal(): CartItem[] {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (raw) return JSON.parse(raw) as CartItem[];
-  } catch {}
-  return [];
+  try { const r = localStorage.getItem(STORAGE_KEY); return r ? JSON.parse(r) : []; } catch { return []; }
 }
-
-function saveLocal(items: CartItem[]): void {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(items));
-}
+function saveLocal(items: CartItem[]): void { localStorage.setItem(STORAGE_KEY, JSON.stringify(items)); }
 
 export function useCart() {
   const [cart, setCart] = useState<CartItem[]>(loadLocal);
@@ -26,86 +17,35 @@ export function useCart() {
   useEffect(() => {
     let cancelled = false;
     async function load() {
-      const { data, error } = await supabase
-        .from(TABLES.CART)
-        .select('dish_id');
-      if (!cancelled && !error && data) {
-        const items = data.map((r: any) => ({ dishId: r.dish_id }));
-        setCart(items);
-        saveLocal(items);
-      }
+      try {
+        const data = await fetchTable(TABLES.CART);
+        if (!cancelled) { const items = data.map((r: any) => ({ dishId: r.dish_id })); setCart(items); saveLocal(items); }
+      } catch {}
     }
     load();
-
-    const channel = supabase
-      .channel('cart-changes')
-      .on(
-        'postgres_changes',
-        { event: 'INSERT', schema: 'public', table: TABLES.CART },
-        (payload: any) => {
-          setCart(prev => {
-            if (prev.some(c => c.dishId === payload.new.dish_id)) return prev;
-            const next = [...prev, { dishId: payload.new.dish_id }];
-            saveLocal(next);
-            return next;
-          });
-        }
-      )
-      .on(
-        'postgres_changes',
-        { event: 'DELETE', schema: 'public', table: TABLES.CART },
-        (payload: any) => {
-          setCart(prev => {
-            const next = prev.filter(c => c.dishId !== payload.old.dish_id);
-            saveLocal(next);
-            return next;
-          });
-        }
-      )
-      .subscribe();
-
-    return () => {
-      cancelled = true;
-      channel.unsubscribe();
-    };
+    const channel = subscribeTable(TABLES.CART, 'cart',
+      (dishId) => { setCart(prev => { if (prev.some(c => c.dishId === dishId)) return prev; const n = [...prev, { dishId }]; saveLocal(n); return n; }); },
+      (dishId) => { setCart(prev => { const n = prev.filter(c => c.dishId !== dishId); saveLocal(n); return n; }); }
+    );
+    const onVisible = () => { if (document.visibilityState === 'visible') load(); };
+    document.addEventListener('visibilitychange', onVisible);
+    return () => { cancelled = true; channel.unsubscribe(); document.removeEventListener('visibilitychange', onVisible); };
   }, []);
 
   const addToCart = useCallback(async (dishId: number) => {
-    setCart(prev => {
-      if (prev.some(item => item.dishId === dishId)) return prev;
-      const next = [...prev, { dishId }];
-      saveLocal(next);
-      return next;
-    });
+    setCart(prev => { if (prev.some(i => i.dishId === dishId)) return prev; const n = [...prev, { dishId }]; saveLocal(n); return n; });
     await supabase.from(TABLES.CART).insert({ dish_id: dishId });
   }, []);
-
   const removeFromCart = useCallback(async (dishId: number) => {
-    setCart(prev => {
-      const next = prev.filter(item => item.dishId !== dishId);
-      saveLocal(next);
-      return next;
-    });
+    setCart(prev => { const n = prev.filter(i => i.dishId !== dishId); saveLocal(n); return n; });
     await supabase.from(TABLES.CART).delete().eq('dish_id', dishId);
   }, []);
+  const clearCart = useCallback(async () => { setCart([]); saveLocal([]); await supabase.from(TABLES.CART).delete().neq('dish_id', -1); }, []);
 
-  const clearCart = useCallback(async () => {
-    setCart([]);
-    saveLocal([]);
-    await supabase.from(TABLES.CART).delete().neq('dish_id', -1);
-  }, []);
-
-  const isInCart = useCallback((dishId: number) => {
-    return cart.some(item => item.dishId === dishId);
-  }, [cart]);
-
-  const getCartDishes = useCallback((): Dish[] => {
-    return cart
-      .map(item => getDishById(item.dishId))
-      .filter((d): d is Dish => d !== undefined);
-  }, [cart]);
-
-  const cartCount = cart.length;
-
-  return { cart, addToCart, removeFromCart, clearCart, isInCart, getCartDishes, cartCount };
+  return {
+    cart, addToCart, removeFromCart, clearCart,
+    isInCart: useCallback((id: number) => cart.some(i => i.dishId === id), [cart]),
+    getCartDishes: useCallback((): Dish[] => cart.map(i => getDishById(i.dishId)).filter((d): d is Dish => d !== undefined), [cart]),
+    cartCount: cart.length,
+  };
 }

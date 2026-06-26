@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { supabase, TABLES } from '../lib/supabase';
+import { supabase, TABLES, fetchTable, subscribeTable } from '../lib/supabase';
 import { getDishById } from '../data/dishes';
 
 const STORAGE_KEY = 'xiaoqiu-today-menu';
@@ -23,60 +23,57 @@ function saveLocal(items: TodayMenuItem[]): void {
 
 export function useTodayMenu() {
   const [menu, setMenu] = useState<TodayMenuItem[]>(loadLocal);
-  const [synced, setSynced] = useState(false);
+  const [connected, setConnected] = useState(false);
+
+  const refresh = useCallback(async () => {
+    try {
+      const data = await fetchTable(TABLES.TODAY_MENU);
+      const items = data.map((r: any) => ({ dishId: r.dish_id, id: r.id }));
+      setMenu(items);
+      saveLocal(items);
+      setConnected(true);
+    } catch {
+      setConnected(false);
+    }
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
+    refresh().then(() => { if (!cancelled) setConnected(true); });
 
-    async function load() {
-      const { data, error } = await supabase
-        .from(TABLES.TODAY_MENU)
-        .select('*')
-        .order('created_at', { ascending: true });
-
-      if (!cancelled && !error && data) {
-        const items = data.map((r: any) => ({ dishId: r.dish_id, id: r.id }));
-        setMenu(items);
-        saveLocal(items);
+    // Real-time subscription
+    const channel = subscribeTable(
+      TABLES.TODAY_MENU,
+      'today-menu',
+      (dishId) => {
+        setMenu(prev => {
+          if (prev.some(m => m.dishId === dishId)) return prev;
+          const next = [...prev, { dishId }];
+          saveLocal(next);
+          return next;
+        });
+      },
+      (dishId) => {
+        setMenu(prev => {
+          const next = prev.filter(m => m.dishId !== dishId);
+          saveLocal(next);
+          return next;
+        });
       }
-      if (!cancelled) setSynced(true);
-    }
+    );
 
-    load();
-
-    // Real-time: listen for inserts & deletes from other devices
-    const channel = supabase
-      .channel('today-menu-changes')
-      .on(
-        'postgres_changes',
-        { event: 'INSERT', schema: 'public', table: TABLES.TODAY_MENU },
-        (payload: any) => {
-          setMenu(prev => {
-            if (prev.some(m => m.dishId === payload.new.dish_id)) return prev;
-            const next = [...prev, { dishId: payload.new.dish_id, id: payload.new.id }];
-            saveLocal(next);
-            return next;
-          });
-        }
-      )
-      .on(
-        'postgres_changes',
-        { event: 'DELETE', schema: 'public', table: TABLES.TODAY_MENU },
-        (payload: any) => {
-          setMenu(prev => {
-            const next = prev.filter(m => m.dishId !== payload.old.dish_id);
-            saveLocal(next);
-            return next;
-          });
-        }
-      )
-      .subscribe();
+    // Refresh when tab becomes visible (user switches back to browser)
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') refresh();
+    };
+    document.addEventListener('visibilitychange', onVisible);
 
     return () => {
       cancelled = true;
       channel.unsubscribe();
+      document.removeEventListener('visibilitychange', onVisible);
     };
-  }, []);
+  }, [refresh]);
 
   const addDish = useCallback(async (dishId: number) => {
     setMenu(prev => {
@@ -118,5 +115,5 @@ export function useTodayMenu() {
     return menu.map(item => getDishById(item.dishId)).filter(Boolean);
   }, [menu]);
 
-  return { menu, addDish, removeDish, addMultiple, clearMenu, getDishes, synced };
+  return { menu, addDish, removeDish, addMultiple, clearMenu, getDishes, refresh, connected };
 }

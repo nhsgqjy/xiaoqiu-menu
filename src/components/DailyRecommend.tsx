@@ -4,7 +4,6 @@ import { Dish } from '../data/dishes';
 interface DailyRecommendProps {
   dishes: Dish[];
   onRefresh: () => void;
-  isFavorite: (id: number) => boolean;
   onAddToMenu: (id: number) => void;
   isInMenu: (id: number) => boolean;
 }
@@ -31,7 +30,8 @@ export default function DailyRecommend({ dishes, onRefresh, onAddToMenu, isInMen
         {dishes.map((dish, i) => {
           const inMenu = isInMenu(dish.id);
           return (
-            <div key={dish.id} className="relative group">
+            <div key={dish.id} className="flex flex-col gap-2">
+              {/* Card (clickable to detail) */}
               <Link
                 to={`/dish/${dish.id}`}
                 className="block bg-white/15 backdrop-blur-sm rounded-2xl p-3 hover:bg-white/25 active:scale-95 transition-all"
@@ -43,21 +43,20 @@ export default function DailyRecommend({ dishes, onRefresh, onAddToMenu, isInMen
                 </div>
               </Link>
 
-              {/* Quick add to today's menu */}
+              {/* Add to menu button — clean + below card */}
               <button
                 onClick={e => {
                   e.preventDefault();
                   e.stopPropagation();
-                  onAddToMenu(dish.id);
+                  if (!inMenu) onAddToMenu(dish.id);
                 }}
-                disabled={inMenu}
-                className={`absolute -bottom-1 left-1/2 -translate-x-1/2 px-2 py-0.5 rounded-full text-[10px] font-bold transition-all active:scale-90 cursor-pointer whitespace-nowrap ${
+                className={`w-full py-1.5 rounded-xl text-xs font-bold transition-all active:scale-95 cursor-pointer ${
                   inMenu
-                    ? 'bg-green-400 text-white'
-                    : 'bg-white text-orange-500 hover:bg-orange-50 shadow'
+                    ? 'bg-white/15 text-white/60'
+                    : 'bg-white text-orange-500 hover:bg-orange-50 shadow-sm'
                 }`}
               >
-                {inMenu ? '✓ 已加入' : '➕ 加菜单'}
+                {inMenu ? '✓' : '+'}
               </button>
             </div>
           );

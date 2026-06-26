@@ -1,22 +1,22 @@
-import { createContext, useContext, useState, useCallback, ReactNode } from 'react';
+import { createContext, useContext, useCallback, ReactNode } from 'react';
 import { useCart } from './useCart';
 import { useTodayMenu } from './useTodayMenu';
 import { Dish } from '../data/dishes';
 
 interface CartContextType {
-  // Cart
   cartCount: number;
   isInCart: (id: number) => boolean;
   addToCart: (id: number) => void;
   removeFromCart: (id: number) => void;
   getCartDishes: () => Dish[];
   clearCart: () => void;
-  // Today's menu
   isInMenu: (id: number) => boolean;
   addToMenu: (id: number) => void;
   removeFromMenu: (id: number) => void;
   getMenuDishes: () => (Dish | undefined)[];
   clearMenu: () => void;
+  refreshMenu: () => void;
+  menuConnected: boolean;
 }
 
 const CartContext = createContext<CartContextType | null>(null);
@@ -41,6 +41,8 @@ export function CartProvider({ children }: { children: ReactNode }) {
     removeFromMenu: menu.removeDish,
     getMenuDishes: menu.getDishes,
     clearMenu: menu.clearMenu,
+    refreshMenu: menu.refresh,
+    menuConnected: menu.connected,
   };
 
   return <CartContext.Provider value={value}>{children}</CartContext.Provider>;
