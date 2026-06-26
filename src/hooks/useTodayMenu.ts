@@ -1,29 +1,18 @@
 import { useState, useEffect, useCallback } from 'react';
-import { supabase, TABLES, fetchTable, subscribeTable } from '../lib/supabase';
+import { supabase, TABLES, fetchTable, startPolling, stopPolling } from '../lib/supabase';
 import { getDishById } from '../data/dishes';
 
 const STORAGE_KEY = 'xiaoqiu-today-menu';
 
-interface TodayMenuItem {
-  dishId: number;
-  id?: number;
-}
+interface TodayMenuItem { dishId: number; id?: number; }
 
 function loadLocal(): TodayMenuItem[] {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (raw) return JSON.parse(raw) as TodayMenuItem[];
-  } catch {}
-  return [];
+  try { const r = localStorage.getItem(STORAGE_KEY); return r ? JSON.parse(r) : []; } catch { return []; }
 }
-
-function saveLocal(items: TodayMenuItem[]): void {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(items));
-}
+function saveLocal(items: TodayMenuItem[]): void { localStorage.setItem(STORAGE_KEY, JSON.stringify(items)); }
 
 export function useTodayMenu() {
   const [menu, setMenu] = useState<TodayMenuItem[]>(loadLocal);
-  const [connected, setConnected] = useState(false);
 
   const refresh = useCallback(async () => {
     try {
@@ -31,66 +20,27 @@ export function useTodayMenu() {
       const items = data.map((r: any) => ({ dishId: r.dish_id, id: r.id }));
       setMenu(items);
       saveLocal(items);
-      setConnected(true);
-    } catch {
-      setConnected(false);
-    }
+    } catch {}
   }, []);
 
   useEffect(() => {
-    let cancelled = false;
-    refresh().then(() => { if (!cancelled) setConnected(true); });
-
-    // Real-time subscription
-    const channel = subscribeTable(
-      TABLES.TODAY_MENU,
-      'today-menu',
-      (dishId) => {
-        setMenu(prev => {
-          if (prev.some(m => m.dishId === dishId)) return prev;
-          const next = [...prev, { dishId }];
-          saveLocal(next);
-          return next;
-        });
-      },
-      (dishId) => {
-        setMenu(prev => {
-          const next = prev.filter(m => m.dishId !== dishId);
-          saveLocal(next);
-          return next;
-        });
-      }
-    );
-
-    // Refresh when tab becomes visible (user switches back to browser)
-    const onVisible = () => {
-      if (document.visibilityState === 'visible') refresh();
-    };
+    refresh();
+    startPolling(TABLES.TODAY_MENU, 5000, refresh);
+    const onVisible = () => { if (document.visibilityState === 'visible') refresh(); };
     document.addEventListener('visibilitychange', onVisible);
-
     return () => {
-      cancelled = true;
-      channel.unsubscribe();
+      stopPolling(TABLES.TODAY_MENU, refresh);
       document.removeEventListener('visibilitychange', onVisible);
     };
   }, [refresh]);
 
   const addDish = useCallback(async (dishId: number) => {
-    setMenu(prev => {
-      if (prev.some(item => item.dishId === dishId)) return prev;
-      const next = [...prev, { dishId }];
-      saveLocal(next);
-      return next;
-    });
+    setMenu(prev => { if (prev.some(i => i.dishId === dishId)) return prev; const n = [...prev, { dishId }]; saveLocal(n); return n; });
     await supabase.from(TABLES.TODAY_MENU).insert({ dish_id: dishId });
   }, []);
 
   const removeDish = useCallback(async (dishId: number) => {
-    setMenu(prev => {
-      const next = prev.filter(item => item.dishId !== dishId);
-      saveLocal(next);
-      return next;
-    });
+    setMenu(prev => { const n = prev.filter(i => i.dishId !== dishId); saveLocal(n); return n; });
     await supabase.from(TABLES.TODAY_MENU).delete().eq('dish_id', dishId);
   }, []);
 
@@ -98,16 +48,13 @@ export function useTodayMenu() {
     setMenu(prev => {
       const existing = new Set(prev.map(i => i.dishId));
       const newItems = dishIds.filter(id => !existing.has(id)).map(id => ({ dishId: id }));
-      const next = [...prev, ...newItems];
-      saveLocal(next);
-      return next;
+      const n = [...prev, ...newItems]; saveLocal(n); return n;
     });
     await supabase.from(TABLES.TODAY_MENU).insert(dishIds.map(id => ({ dish_id: id })));
   }, []);
 
   const clearMenu = useCallback(async () => {
-    setMenu([]);
-    saveLocal([]);
+    setMenu([]); saveLocal([]);
     await supabase.from(TABLES.TODAY_MENU).delete().neq('dish_id', -1);
   }, []);
 
@@ -115,5 +62,5 @@ export function useTodayMenu() {
     return menu.map(item => getDishById(item.dishId)).filter(Boolean);
   }, [menu]);
 
-  return { menu, addDish, removeDish, addMultiple, clearMenu, getDishes, refresh, connected };
+  return { menu, addDish, removeDish, addMultiple, clearMenu, getDishes, refresh, connected: true };
 }

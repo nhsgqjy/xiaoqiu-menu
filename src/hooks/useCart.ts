@@ -1,9 +1,8 @@
 import { useState, useEffect, useCallback } from 'react';
 import { getDishById, Dish } from '../data/dishes';
-import { supabase, TABLES, fetchTable, subscribeTable } from '../lib/supabase';
+import { supabase, TABLES, fetchTable, startPolling, stopPolling } from '../lib/supabase';
 
 interface CartItem { dishId: number; }
-
 const STORAGE_KEY = 'xiaoqiu-cart';
 
 function loadLocal(): CartItem[] {
@@ -14,23 +13,21 @@ function saveLocal(items: CartItem[]): void { localStorage.setItem(STORAGE_KEY, 
 export function useCart() {
   const [cart, setCart] = useState<CartItem[]>(loadLocal);
 
-  useEffect(() => {
-    let cancelled = false;
-    async function load() {
-      try {
-        const data = await fetchTable(TABLES.CART);
-        if (!cancelled) { const items = data.map((r: any) => ({ dishId: r.dish_id })); setCart(items); saveLocal(items); }
-      } catch {}
-    }
-    load();
-    const channel = subscribeTable(TABLES.CART, 'cart',
-      (dishId) => { setCart(prev => { if (prev.some(c => c.dishId === dishId)) return prev; const n = [...prev, { dishId }]; saveLocal(n); return n; }); },
-      (dishId) => { setCart(prev => { const n = prev.filter(c => c.dishId !== dishId); saveLocal(n); return n; }); }
-    );
-    const onVisible = () => { if (document.visibilityState === 'visible') load(); };
-    document.addEventListener('visibilitychange', onVisible);
-    return () => { cancelled = true; channel.unsubscribe(); document.removeEventListener('visibilitychange', onVisible); };
+  const refresh = useCallback(async () => {
+    try {
+      const data = await fetchTable(TABLES.CART);
+      const items = data.map((r: any) => ({ dishId: r.dish_id }));
+      setCart(items); saveLocal(items);
+    } catch {}
   }, []);
+
+  useEffect(() => {
+    refresh();
+    startPolling(TABLES.CART, 5000, refresh);
+    const onVisible = () => { if (document.visibilityState === 'visible') refresh(); };
+    document.addEventListener('visibilitychange', onVisible);
+    return () => { stopPolling(TABLES.CART, refresh); document.removeEventListener('visibilitychange', onVisible); };
+  }, [refresh]);
 
   const addToCart = useCallback(async (dishId: number) => {
     setCart(prev => { if (prev.some(i => i.dishId === dishId)) return prev; const n = [...prev, { dishId }]; saveLocal(n); return n; });
