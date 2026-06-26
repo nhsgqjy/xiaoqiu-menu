@@ -1,0 +1,41 @@
+@import "tailwindcss";
+
+/* Custom styles */
+@layer base {
+  :root {
+    --color-primary: #ff6b35;
+    --color-primary-light: #ff8c5a;
+  }
+}
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+}
+
+/* Smooth page transitions */
+.page-enter {
+  animation: fadeIn 0.2s ease-out;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* Hide scrollbar for category quick nav */
+.scrollbar-hide {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;
+}
+
+/* Flash highlight when jumping to a dish from recommendation */
+@keyframes dishFlash {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(251, 146, 60, 0); }
+  50% { box-shadow: 0 0 0 4px rgba(251, 146, 60, 0.5); }
+}
+.dish-flash {
+  animation: dishFlash 1.5s ease-in-out 2;
+}
