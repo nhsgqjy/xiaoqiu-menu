@@ -1,58 +1,43 @@
 import { useRef } from 'react';
 import { categories, getDishesByCategory } from '../data/dishes';
 import DishCard from '../components/DishCard';
+import DailyRecommend from '../components/DailyRecommend';
+import TodayMenu from '../components/TodayMenu';
 import { useDailyRec } from '../hooks/useDailyRec';
 import { useFavorites } from '../hooks/useFavorites';
+import { useCartContext } from '../hooks/CartContext';
 
 const categoryNav = categories.map(c => ({ key: c.key, label: c.label, emoji: c.emoji, color: c.color }));
 
 export default function HomePage() {
   const { favorites, toggleFavorite, isFavorite } = useFavorites();
   const { recommended, refresh } = useDailyRec(favorites);
+  const { isInCart, addToCart, isInMenu, addToMenu, removeFromMenu, getMenuDishes, clearMenu } = useCartContext();
   const sectionRefs = useRef<Record<string, HTMLDivElement | null>>({});
 
   const scrollTo = (key: string) => {
     sectionRefs.current[key]?.scrollIntoView({ behavior: 'smooth', block: 'start' });
   };
 
+  const menuDishes = getMenuDishes().filter(Boolean) as NonNullable<ReturnType<typeof getMenuDishes>[number]>[];
+
   return (
     <div className="space-y-6">
-      {/* === Daily recommendation (compact) === */}
-      <div className="bg-gradient-to-r from-orange-400 to-red-500 rounded-2xl p-4 text-white shadow-md">
-        <div className="flex items-center justify-between mb-3">
-          <div className="flex items-center gap-2">
-            <span className="text-xl">📋</span>
-            <div>
-              <h2 className="text-base font-bold">今日推荐</h2>
-              <p className="text-xs text-white/70">荤素搭配，营养美味</p>
-            </div>
-          </div>
-          <button
-            onClick={refresh}
-            className="px-3 py-1.5 bg-white/20 rounded-full text-xs font-medium hover:bg-white/30 active:scale-95 transition-all cursor-pointer"
-          >
-            🔄 换一批
-          </button>
-        </div>
-        <div className="flex gap-2">
-          {recommended.map((dish, i) => (
-            <button
-              key={dish.id}
-              onClick={() => {
-                const el = document.getElementById(`dish-${dish.id}`);
-                el?.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                el?.classList.add('dish-flash');
-                setTimeout(() => el?.classList.remove('dish-flash'), 3000);
-              }}
-              className="flex-1 bg-white/15 rounded-xl p-2 text-center hover:bg-white/25 active:scale-95 transition-all cursor-pointer"
-            >
-              <div className="text-2xl mb-1">{dish.emoji}</div>
-              <div className="text-[10px] text-white/70">{['荤', '素', '搭'][i]}</div>
-              <div className="text-xs font-medium leading-tight line-clamp-1">{dish.name}</div>
-            </button>
-          ))}
-        </div>
-      </div>
+      {/* === Daily recommendation === */}
+      <DailyRecommend
+        dishes={recommended}
+        onRefresh={refresh}
+        isFavorite={isFavorite}
+        onAddToMenu={addToMenu}
+        isInMenu={isInMenu}
+      />
+
+      {/* === Today's Menu === */}
+      <TodayMenu
+        dishes={menuDishes}
+        onRemove={removeFromMenu}
+        onClear={clearMenu}
+      />
 
       {/* === Category quick nav === */}
       <div className="flex gap-1.5 overflow-x-auto pb-1 scrollbar-hide -mx-1 px-1">
@@ -97,6 +82,8 @@ export default function HomePage() {
                       isFavorite={isFavorite(dish.id)}
                       onToggleFavorite={toggleFavorite}
                       variant="menu"
+                      onAddToCart={addToCart}
+                      isInCart={isInCart(dish.id)}
                     />
                   </div>
                 ))}

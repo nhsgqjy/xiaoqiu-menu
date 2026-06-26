@@ -2,10 +2,12 @@ import { useParams, Link } from 'react-router-dom';
 import { Category, categories, getDishesByCategory } from '../data/dishes';
 import DishCard from '../components/DishCard';
 import { useFavorites } from '../hooks/useFavorites';
+import { useCartContext } from '../hooks/CartContext';
 
 export default function CategoryPage() {
   const { type } = useParams<{ type: string }>();
   const { toggleFavorite, isFavorite } = useFavorites();
+  const { isInCart, addToCart } = useCartContext();
 
   const categoryInfo = categories.find(c => c.key === type);
   const dishes = getDishesByCategory((type as Category) || 'beef');
@@ -56,6 +58,8 @@ export default function CategoryPage() {
               dish={dish}
               isFavorite={isFavorite(dish.id)}
               onToggleFavorite={toggleFavorite}
+              onAddToCart={addToCart}
+              isInCart={isInCart(dish.id)}
             />
           ))}
         </div>

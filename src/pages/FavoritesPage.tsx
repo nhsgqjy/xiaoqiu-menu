@@ -1,10 +1,12 @@
 import { Link } from 'react-router-dom';
 import { useFavorites } from '../hooks/useFavorites';
-import { getDishById, categories, getDishesByCategory, Category } from '../data/dishes';
+import { getDishById, categories } from '../data/dishes';
 import DishCard from '../components/DishCard';
+import { useCartContext } from '../hooks/CartContext';
 
 export default function FavoritesPage() {
   const { favorites, toggleFavorite, isFavorite } = useFavorites();
+  const { isInCart, addToCart } = useCartContext();
 
   // Group favorites by category
   const favoriteDishes = favorites
@@ -50,6 +52,8 @@ export default function FavoritesPage() {
                     dish={dish!}
                     isFavorite={isFavorite(dish!.id)}
                     onToggleFavorite={toggleFavorite}
+                    onAddToCart={addToCart}
+                    isInCart={isInCart(dish!.id)}
                   />
                 ))}
               </div>

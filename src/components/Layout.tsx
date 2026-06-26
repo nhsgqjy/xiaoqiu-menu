@@ -1,4 +1,7 @@
+import { useState } from 'react';
 import { Outlet, NavLink, useLocation } from 'react-router-dom';
+import { useCartContext } from '../hooks/CartContext';
+import CartDrawer from './CartDrawer';
 
 const navItems = [
   { to: '/', label: '首页', emoji: '🏠' },
@@ -7,7 +10,15 @@ const navItems = [
 
 export default function Layout() {
   const location = useLocation();
-  const isRoot = location.pathname === '/';
+  const [cartOpen, setCartOpen] = useState(false);
+  const { cartCount, getCartDishes, removeFromCart, clearCart, addToMenu } = useCartContext();
+
+  const handleConfirm = () => {
+    const dishes = getCartDishes();
+    dishes.forEach(d => addToMenu(d.id));
+    clearCart();
+    setCartOpen(false);
+  };
 
   return (
     <div className="min-h-screen bg-gray-50 pb-20">
@@ -17,7 +28,7 @@ export default function Layout() {
           <h1 className="text-lg font-bold text-gray-900">
             🍳 小邱菜单
           </h1>
-          <nav className="flex gap-1">
+          <nav className="flex gap-1 items-center">
             {navItems.map(item => (
               <NavLink
                 key={item.to}
@@ -34,6 +45,18 @@ export default function Layout() {
                 {item.emoji} {item.label}
               </NavLink>
             ))}
+            {/* Cart button */}
+            <button
+              onClick={() => setCartOpen(true)}
+              className="relative px-2 py-1.5 rounded-full text-sm font-medium text-gray-500 hover:bg-gray-100 transition-colors cursor-pointer"
+            >
+              🛒
+              {cartCount > 0 && (
+                <span className="absolute -top-0.5 -right-0.5 w-5 h-5 rounded-full bg-red-500 text-white text-[10px] font-bold flex items-center justify-center">
+                  {cartCount}
+                </span>
+              )}
+            </button>
           </nav>
         </div>
       </header>
@@ -63,8 +86,30 @@ export default function Layout() {
               <span>{item.label}</span>
             </NavLink>
           ))}
+          {/* Cart tab */}
+          <button
+            onClick={() => setCartOpen(true)}
+            className="flex-1 flex flex-col items-center py-2 text-xs font-medium text-gray-400 relative cursor-pointer"
+          >
+            <span className="text-xl mb-0.5">🛒</span>
+            <span>点菜</span>
+            {cartCount > 0 && (
+              <span className="absolute top-1 right-1/4 w-5 h-5 rounded-full bg-red-500 text-white text-[10px] font-bold flex items-center justify-center">
+                {cartCount}
+              </span>
+            )}
+          </button>
         </div>
       </nav>
+
+      {/* Cart drawer */}
+      <CartDrawer
+        open={cartOpen}
+        onClose={() => setCartOpen(false)}
+        dishes={getCartDishes()}
+        onRemove={removeFromCart}
+        onConfirm={handleConfirm}
+      />
     </div>
   );
 }
